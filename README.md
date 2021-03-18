@@ -689,7 +689,7 @@ ext value will affect numbering of output maps:
 ```
 This is needed because we performed 24 hours average over 6 hourly steps.
 
-The paragraph below  explains how to set start, end, and aggregation steps and details the protocol used within pyg2p in order to compute the average values.
+The paragraph below explains how to set start, end, and aggregation steps in order to compute the average values.
 
 Start step = start-of-first-day + aggregation time
 End step = end-of-the-last-day
@@ -702,35 +702,38 @@ Daily average for DAY 1 is the result of the average of the following steps: 6,1
 Daily average for DAY 2 is the result of the average of the following steps: 30,36,42,48. Each step has weight=6, the daily average is then computed as Total/24.
 Daily average for DAY 3 is the result of the average of the following steps: 54,60,66,72. Each step has weight=6, the daily average is then computed as Total/24.
 
-Example2: grib file fc_day3.grb (steps from 54 to 72)
+Example2: grib file containig instantanueous temperature data every 6 hours for 1 days (steps 54,60,66,72). The user wants to compute daily average values.
 Aggregation step =24
 Start step= 72 (that is 48+24)
 End step = 72 (in this case, end step and start step are both 72)
 Tthe result is the average of the steps 54,60,66,72
 
+In order to better understand the above explained settings, the reader is invited to look at the detailed explanation below. 
 The algorithm to compute the average values makes use of two nested loops:
      - EXTERNAL LOOP:
-       iter_start: s-a+1 = 1
-       iter_stop: e-a+2 = 50 (last number used = 49)
-       step_external: a =24
+       iter_start: start-aggregation+1 
+       iter_stop: end-aggregation+2 
+       step_external: aggregation
               - INNER LOOP:
                 iter_from: iter_start
-                iter_to: iter_start+a
+                iter_to: iter_start+aggregation
                 step_inner: 1
 
-The inner loop looks for the steps included in the input grib. It looks for steps with increment 1 (step_inner=1). If a step is not found in the input grib, the code uses the values of the closest next step. the code repeats each of the 4 values for 6 times (or, as you wrote, it assumes that all the values are the same within the 6-hours period), and then it divides the total by 24.
+The inner loop looks for the steps included in the input grib. It looks for steps with increment 1 (step_inner=1). If a step is not found in the input grib, the code uses (repeats) the values of the closest next step. 
 
-     - EXTERNAL LOOP:
-     iter_start: 1
-     iter_stop: 50
+Exmaple: grib file containig instantanueous temperature data every 6 hours for 3 days (steps 0,6,12,18,...,72). The user wants to compute daily average values.
+
+     - EXTERNAL LOOP1:
+     iter_start: 24-24+1 =1
+     iter_stop: 72-24+2=50
      step_external:24
 
-                - INNER LOOP:
-                iter_from: 1
-                iter_to: 25      
+                - INNER LOOP1:
+               iter_from: 1
+               iter_to: 1+24=25      
                The code looks for the steps from 1 to 24, with increments of 1
                STEPS 1,2,3,4,5 are not found in the grib input file. The code uses the values of step 6.
-               STEP 6 is given by the grrib input file.
+               STEP 6 is given by the grib input file.
 
                STEPS 7,8,9,10,11 are not found in the grib input file. The code uses the values of step 12.
                STEP 12 is given by the grib input file.
@@ -741,20 +744,20 @@ The inner loop looks for the steps included in the input grib. It looks for step
                ....
                AVERAGE= total/24
 
-     - EXTERNAL LOOP:
-     iter_start: 25
+     - EXTERNAL LOOP2:
+     iter_start: 25 (iter_start LOOP1 + step_external)
      iter_stop: 50
      step_external:24
-               - INNER LOOP:
-               iter_from: 25
+               - INNER LOOP2:
+               iter_from: 25 
                iter:to: 49
                The code looks for the steps from 25 to 48, with increments of 1
 
-    - EXTERNAL LOOP:
-    iter_start: 49
+    - EXTERNAL LOOP3:
+    iter_start: 49 (iter_start LOOP2 + step_external)
     iter_stop: 50
     step_external:24
-              - INNER LOOP:
+              - INNER LOOP3:
                iter_from: 49
                iter_to: 73
 
