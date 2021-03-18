@@ -3,7 +3,7 @@
 
 # pyg2p
 pyg2p is a converter between GRIB and netCDF4/PCRaster files. 
-It can also manipulates GRIB messages (performing aggregation or simple unit conversion) before to apply format conversion.
+It can also manipulates GRIB messages (performing aggregation or simple unit conversion) before applying the format conversion.
 
 ## Installation
 
@@ -636,7 +636,9 @@ The JSON configuration in the execution file will look like:
 To better understand what these two types of aggregations do, the DEBUG output of execution is presented later in same paragraph.
 
 ### Average
-Temperatures are often extracted as averages on 24 hours or 6 hours. Here's a typical execution configuration and the output of interest:
+Temperature forecast data are usually instantaneous values. Coversely, many environmental models require average temperature values over a pre-defined time span (e.g. daily temperature values). The average function implemented within pyg2p allows to compute the average of instantaneous values: the time span for the computation of the average is defined by the user.
+
+Here's a typical execution configuration and the output of interest:
 
 **cosmo_t24.json**
 
@@ -685,8 +687,79 @@ ext value will affect numbering of output maps:
 [2013-07-12 00:06:19,349] :./cosmo/T24a0000.013 written!
 [2013-07-12 00:06:19,620] :./cosmo/T24a0000.017 written!
 ```
-
 This is needed because we performed 24 hours average over 6 hourly steps.
+
+The paragraph below  explains how to set start, end, and aggregation steps and details the protocol used within pyg2p in order to compute the average values.
+
+Start step = start-of-first-day + aggregation time
+End step = end-of-the-last-day
+
+Example 1: grib file containig instantanueous temperature data every 6 hours for 3 days (steps 0,6,12,18,...,72). The user wants to compute daily average values.
+Aggregation step =24
+Start step = 24 (that is 0+24)
+End step = 72
+Daily average for DAY 1 is the result of the average of the following steps: 6,12,28,24. Each step has weight=6, the daily average is then computed as Total/24.
+Daily average for DAY 2 is the result of the average of the following steps: 30,36,42,48. Each step has weight=6, the daily average is then computed as Total/24.
+Daily average for DAY 3 is the result of the average of the following steps: 54,60,66,72. Each step has weight=6, the daily average is then computed as Total/24.
+
+Example2: grib file fc_day3.grb (steps from 54 to 72)
+Aggregation step =24
+Start step= 72 (that is 48+24)
+End step = 72 (in this case, end step and start step are both 72)
+Tthe result is the average of the steps 54,60,66,72
+
+The algorithm to compute the average values makes use of two nested loops:
+     - EXTERNAL LOOP:
+       iter_start: s-a+1 = 1
+       iter_stop: e-a+2 = 50 (last number used = 49)
+       step_external: a =24
+              - INNER LOOP:
+                iter_from: iter_start
+                iter_to: iter_start+a
+                step_inner: 1
+
+The inner loop looks for the steps included in the input grib. It looks for steps with increment 1 (step_inner=1). If a step is not found in the input grib, the code uses the values of the closest next step. the code repeats each of the 4 values for 6 times (or, as you wrote, it assumes that all the values are the same within the 6-hours period), and then it divides the total by 24.
+
+     - EXTERNAL LOOP:
+     iter_start: 1
+     iter_stop: 50
+     step_external:24
+
+                - INNER LOOP:
+                iter_from: 1
+                iter_to: 25      
+               The code looks for the steps from 1 to 24, with increments of 1
+               STEPS 1,2,3,4,5 are not found in the grib input file. The code uses the values of step 6.
+               STEP 6 is given by the grrib input file.
+
+               STEPS 7,8,9,10,11 are not found in the grib input file. The code uses the values of step 12.
+               STEP 12 is given by the grib input file.
+
+               STEPS 13,14,15,16,17 are not found in the grib input file. The code uses the values of step 18.
+               STEP 18 is given by the grib input file.
+
+               ....
+               AVERAGE= total/24
+
+     - EXTERNAL LOOP:
+     iter_start: 25
+     iter_stop: 50
+     step_external:24
+               - INNER LOOP:
+               iter_from: 25
+               iter:to: 49
+               The code looks for the steps from 25 to 48, with increments of 1
+
+    - EXTERNAL LOOP:
+    iter_start: 49
+    iter_stop: 50
+    step_external:24
+              - INNER LOOP:
+               iter_from: 49
+               iter_to: 73
+
+ 
+
 
 ### Accumulation
 For precipitation values, accumulation over 6 or 24 hours is often performed. Here's an example of configuration and execution output in DEBUG mode.
